@@ -1,0 +1,48 @@
+{
+  "name": "ai-doc-processor-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "format": "prettier --write src/**/*.{ts,tsx,json,css,md}",
+    "format:check": "prettier --check src/**/*.{ts,tsx,json,css,md}",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
+    "@vitejs/plugin-react": "^5.1.1",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.7.4",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@mantine/core": "^8.3.9",
+    "@mantine/dropzone": "^8.3.9",
+    "@mantine/form": "^8.3.9",
+    "@mantine/hooks": "^8.3.9",
+    "@mantine/notifications": "^8.3.9",
+    "@tabler/icons-react": "^3.35.0",
+    "@tanstack/react-query": "^5.90.11",
+    "framer-motion": "^12.23.25",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-hook-form": "^7.67.0",
+    "react-router-dom": "^7.10.0",
+    "socket.io-client": "^4.8.1",
+    "zod": "^4.1.13",
+    "zustand": "^5.0.9"
+  }
+}
