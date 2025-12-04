@@ -8,6 +8,13 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-green.svg)](https://mongodb.com)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-orange.svg)](https://openai.com)
 
+## 🌐 **Live Demo**
+
+**🚀 Try it now:** [https://ai-doc-processor-frontend.vercel.app](https://ai-doc-processor-frontend.vercel.app)
+
+**Backend API:** [https://dataweave-turerz.onrender.com](https://dataweave-turerz.onrender.com)  
+**API Documentation:** [https://dataweave-turerz.onrender.com/docs](https://dataweave-turerz.onrender.com/docs)
+
 ## 🎯 **The Problem This Solves**
 
 This application solves the **"Unstructured Data to Structured Data"** problem - a common challenge in data processing and document management.
@@ -113,6 +120,11 @@ npm run dev
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8001
 - **API Docs**: http://localhost:8001/docs
+
+### **Or Use Live Demo**
+- **Live App**: https://ai-doc-processor-frontend.vercel.app
+- **Live API**: https://dataweave-turerz.onrender.com
+- **Live Docs**: https://dataweave-turerz.onrender.com/docs
 
 ## 📖 **Usage**
 
