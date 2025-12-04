@@ -1,5 +1,5 @@
 # AI-Powered Document Processing - Requirements
-# Pinned versions for stability and reproducibility
+# Updated for Python 3.13 compatibility
 
 # PDF Processing
 pdfplumber==0.10.3
@@ -11,7 +11,7 @@ openai==1.6.1
 # Alternative: anthropic==0.8.1
 
 # Data Processing
-pandas==2.1.4
+pandas>=2.2.0
 openpyxl==3.1.2
 
 # Web Interface
@@ -27,9 +27,9 @@ pydantic==2.5.3
 tqdm==4.66.1
 
 # Backend API
-fastapi==0.108.0
-uvicorn==0.25.0
-PyPDF2==3.0.1
+fastapi>=0.108.0
+uvicorn>=0.25.0
+PyPDF2>=3.0.1
 
 # Note: Fuzzy matching uses Python's built-in difflib.SequenceMatcher
 # No additional dependency required
@@ -39,3 +39,6 @@ pymongo>=4.6.0
 motor>=3.3.0  # For async operations
 dnspython>=2.4.0  # For SRV connection strings
 apscheduler>=3.10.0  # For scheduled learning tasks
+
+# Python 3.13 compatibility
+numpy>=1.26.0
