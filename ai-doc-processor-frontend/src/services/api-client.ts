@@ -20,11 +20,11 @@ class ApiClient {
   private getHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
     const headers = { ...this.defaultHeaders, ...customHeaders };
     const token = this.getAuthToken();
-    
+
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
-    
+
     return headers;
   }
 
