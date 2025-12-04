@@ -1,0 +1,36 @@
+# AI-Powered Document Processing - Python 3.11 Optimized
+# Fallback requirements for maximum compatibility
+
+# PDF Processing
+pdfplumber==0.10.3
+
+# LLM Integration
+langchain==0.1.0
+langchain-openai==0.0.2
+openai==1.6.1
+
+# Data Processing - Stable versions for Python 3.11
+pandas==2.1.4
+openpyxl==3.1.2
+numpy==1.24.4
+
+# Backend API
+fastapi==0.108.0
+uvicorn[standard]==0.25.0
+PyPDF2==3.0.1
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.5.3
+tqdm==4.66.1
+
+# MongoDB Atlas Learning System
+pymongo==4.6.0
+motor==3.3.0
+dnspython==2.4.0
+apscheduler==3.10.0
+
+# Core dependencies
+typing-extensions==4.8.0
+setuptools==69.0.0
+wheel==0.42.0
