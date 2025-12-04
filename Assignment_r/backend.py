@@ -249,12 +249,10 @@ async def root():
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Allow all Vercel deployments
     allow_origins=[
         "http://localhost:3001",
         "http://localhost:3000",
-        "https://ai-doc-processor-frontend-90dgh941w.vercel.app",
-        "https://ai-doc-processor-frontend-nlic31mg6.vercel.app",
-        "https://*.vercel.app"  # Allow all Vercel preview deployments
     ],
     allow_credentials=True,
     allow_methods=["*"],
