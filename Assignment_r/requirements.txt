@@ -17,6 +17,7 @@ numpy>=1.26.0,<2.0.0
 # Backend API - Production ready versions
 fastapi>=0.108.0,<0.120.0
 uvicorn[standard]>=0.25.0,<0.30.0
+python-multipart>=0.0.6
 PyPDF2>=3.0.1
 
 # Utilities - Stable versions
