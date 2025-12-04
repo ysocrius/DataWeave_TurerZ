@@ -1,7 +1,7 @@
 # Ultra-minimal requirements for Free tier deployment
-# No pandas to avoid Python 3.13 compilation issues
+# Using latest versions with Python 3.13 pre-built wheels
 
-fastapi==0.108.0
-uvicorn==0.25.0
-python-dotenv==1.0.0
-pydantic==2.5.3
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-dotenv>=1.0.0
+pydantic>=2.6.0
