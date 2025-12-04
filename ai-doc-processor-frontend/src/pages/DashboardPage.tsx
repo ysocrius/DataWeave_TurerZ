@@ -31,7 +31,7 @@ import { FileCard } from '@/components/FileUpload/FileCard';
 import { StatusCard } from '@/components/Processing/StatusCard';
 import type { ProcessingStatus } from '@/components/Processing/StatusCard';
 
-import { DataTable } from '@/components/Results/DataTable';
+import { DataTable } from '@/components/Results/DataTable.tsx';
 import { JSONViewer } from '@/components/Results/JSONViewer';
 import { DownloadButtons } from '@/components/Results/DownloadButtons';
 import { processingService } from '@/services';
