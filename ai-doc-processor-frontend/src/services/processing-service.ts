@@ -51,8 +51,8 @@ export interface ProcessingJob {
 
 // SSE Event Types
 export interface ChunkProgressEvent {
-  event: 'start' | 'chunk_start' | 'chunk_progress' | 'chunk_complete' | 'complete' | 'error' | 
-         'analysis_start' | 'analysis_complete' | 'merging_start' | 'intelligent_complete' | 'character_complete';
+  event: 'start' | 'chunk_start' | 'chunk_progress' | 'chunk_complete' | 'complete' | 'error' |
+  'analysis_start' | 'analysis_complete' | 'merging_start' | 'intelligent_complete' | 'character_complete';
   chunk?: number;
   total_chunks?: number;
   page_range?: string;
@@ -76,16 +76,16 @@ export interface ChunkProgressEvent {
   chunk_results?: Array<{ chunk_id: number; entries: Array<any> }>;
   total_rows?: number;
   total_pages?: number;
-  chunk_size?: number;
   processing_strategy?: string;
   sections_analyzed?: number;
   merge_strategy?: string;
+  session_id?: string;
 }
 
 export type ChunkProgressCallback = (event: ChunkProgressEvent) => void;
 
 class ProcessingService {
-  private readonly API_BASE_URL = 'http://localhost:8001';
+  private readonly API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8001';
 
   /**
    * Check if backend is available
@@ -163,7 +163,7 @@ class ProcessingService {
     // Check backend availability
     const isBackendAvailable = await this.checkBackendHealth();
     if (!isBackendAvailable) {
-      throw new Error('Backend server is not responding. Please ensure the Python backend is running on port 8001.');
+      throw new Error('Backend server is not responding. Please ensure the Python backend is running.');
     }
 
     const formData = new FormData();
@@ -191,21 +191,21 @@ class ProcessingService {
           const processStream = async () => {
             while (true) {
               const { done, value } = await reader.read();
-              
+
               if (done) break;
-              
+
               buffer += decoder.decode(value, { stream: true });
-              
+
               // Process complete SSE messages
               const lines = buffer.split('\n\n');
               buffer = lines.pop() || '';
-              
+
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   try {
                     const data = JSON.parse(line.slice(6)) as ChunkProgressEvent;
                     onProgress(data);
-                    
+
                     if (data.event === 'character_complete') {
                       resolve({
                         entries: data.entries || [],
@@ -220,7 +220,7 @@ class ProcessingService {
                       });
                       return;
                     }
-                    
+
                     if (data.event === 'error') {
                       reject(new Error(data.message || 'Processing failed'));
                       return;

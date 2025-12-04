@@ -60,7 +60,7 @@ export function DashboardPage() {
     const [processingMode, setProcessingMode] = useState<'character'>('character');
     const [chunkInfo, setChunkInfo] = useState<ChunkedProcessingResult | null>(null);
     const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    
+
     // Analytics and Feedback state
     const [showAnalytics, setShowAnalytics] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
@@ -73,7 +73,7 @@ export function DashboardPage() {
     const [loadingAutoFeedback, setLoadingAutoFeedback] = useState(false);
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [cardDismissed, setCardDismissed] = useState(false);
-    
+
     // Live streaming progress state
     const [liveProgress, setLiveProgress] = useState<{
         isStreaming: boolean;
@@ -147,7 +147,7 @@ export function DashboardPage() {
         try {
             // Character-based processing (default and only mode)
             setProcessingStatus('analyzing');
-            
+
             // Reset live progress for character processing
             setLiveProgress({
                 isStreaming: true,
@@ -161,7 +161,7 @@ export function DashboardPage() {
                 sectionsFound: 0,
                 strategy: '',
             });
-            
+
             // Start elapsed time counter
             const startTime = Date.now();
             elapsedTimerRef.current = setInterval(() => {
@@ -170,7 +170,7 @@ export function DashboardPage() {
                     elapsedTime: Math.round((Date.now() - startTime) / 1000),
                 }));
             }, 1000);
-            
+
             const handleCharacterProgress = (event: ChunkProgressEvent) => {
                 if (event.event === 'analysis_start') {
                     setLiveProgress(prev => ({ ...prev, analysisPhase: 'analyzing' }));
@@ -194,11 +194,11 @@ export function DashboardPage() {
                     setLiveProgress(prev => ({
                         ...prev,
                         currentChunk: event.chunk || 0,
-                        chunks: prev.chunks.map(c => 
-                            c.chunk === event.chunk 
-                                ? { 
-                                    ...c, 
-                                    status: 'started', 
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? {
+                                    ...c,
+                                    status: 'started',
                                     pageRange: event.page_range,
                                     sectionType: event.char_range
                                 }
@@ -208,8 +208,8 @@ export function DashboardPage() {
                 } else if (event.event === 'chunk_progress') {
                     setLiveProgress(prev => ({
                         ...prev,
-                        chunks: prev.chunks.map(c => 
-                            c.chunk === event.chunk 
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
                                 ? { ...c, status: event.status as LiveChunkStatus['status'] }
                                 : c
                         ),
@@ -217,10 +217,10 @@ export function DashboardPage() {
                 } else if (event.event === 'chunk_complete') {
                     setLiveProgress(prev => ({
                         ...prev,
-                        chunks: prev.chunks.map(c => 
-                            c.chunk === event.chunk 
-                                ? { 
-                                    ...c, 
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? {
+                                    ...c,
                                     status: event.status === 'success' ? 'success' : 'error',
                                     entriesCount: event.entries_count,
                                     processingTime: event.processing_time,
@@ -233,21 +233,21 @@ export function DashboardPage() {
                     setLiveProgress(prev => ({ ...prev, mergingPhase: 'merging' }));
                 }
             };
-            
+
             const characterResult = await processingService.processPDF(
                 selectedFile,
                 handleCharacterProgress
             );
-            
+
             // Stop elapsed timer
             if (elapsedTimerRef.current) {
                 clearInterval(elapsedTimerRef.current);
             }
-            
+
             setLiveProgress(prev => ({ ...prev, isStreaming: false, mergingPhase: 'complete' }));
             setChunkInfo(characterResult);
-            setResult({ 
-                entries: characterResult.entries, 
+            setResult({
+                entries: characterResult.entries,
                 global_notes: characterResult.global_notes,
                 session_id: characterResult.session_id,
                 processing_time: characterResult.processing_time
@@ -264,7 +264,7 @@ export function DashboardPage() {
                         try {
                             await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1))); // Wait 2s, 4s, 6s, 8s, 10s
                             console.log(`🔄 Fetching auto-feedback (attempt ${i + 1}/${retries})...`);
-                            const response = await fetch(`http://localhost:8001/api/feedback/${characterResult.session_id}`);
+                            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8001'}/api/feedback/${characterResult.session_id}`);
                             const data = await response.json();
                             console.log(`📥 Response:`, data);
                             if (data.success && data.feedback) {
@@ -301,7 +301,7 @@ export function DashboardPage() {
                 clearInterval(elapsedTimerRef.current);
             }
             setLiveProgress(prev => ({ ...prev, isStreaming: false }));
-            
+
             const errorMessage = err.message || 'Processing failed';
             setError(errorMessage);
             setProcessingStatus('error');
@@ -371,11 +371,11 @@ export function DashboardPage() {
     const handleFetchAnalytics = async () => {
         setLoadingAnalytics(true);
         try {
-            const response = await fetch('http://localhost:8001/api/analytics');
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8001'}/api/analytics`);
             const data = await response.json();
             setAnalytics(data);
             setShowAnalytics(true);
-            
+
             notifications.show({
                 title: 'Analytics Loaded',
                 message: 'System analytics retrieved successfully',
@@ -399,14 +399,14 @@ export function DashboardPage() {
         setFeedbackRating(0);
         setFeedbackText('');
         setShowFeedback(true);
-        
+
         // Fetch auto-generated feedback if session exists
         if (result?.session_id && !autoFeedback) {
             setLoadingAutoFeedback(true);
             try {
-                const response = await fetch(`http://localhost:8001/api/feedback/${result.session_id}`);
+                const response = await fetch(`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8001'}/api/feedback/${result.session_id}`);
                 const data = await response.json();
-                
+
                 if (data.success && data.feedback) {
                     setAutoFeedback(data.feedback);
                     // Don't pre-fill rating - let user choose
@@ -425,7 +425,7 @@ export function DashboardPage() {
         setSubmittingFeedback(true);
         try {
             // Submit agreement as feedback with same rating
-            const response = await fetch('http://localhost:8001/api/feedback', {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8001'}/api/feedback`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -480,7 +480,7 @@ export function DashboardPage() {
 
         setSubmittingFeedback(true);
         try {
-            const response = await fetch('http://localhost:8001/api/feedback', {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8001'}/api/feedback`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -539,7 +539,7 @@ export function DashboardPage() {
                     <Text c="dimmed" size="xl" maw={600} mx="auto" mb="md">
                         Transform unstructured PDFs into structured Excel files with <span style={{ color: '#7b31e6', fontWeight: 600 }}>100% fidelity</span>
                     </Text>
-                    
+
                     {/* Analytics and Feedback Buttons */}
                     <Group justify="center" gap="md" mt="lg">
                         <Button
@@ -686,21 +686,21 @@ export function DashboardPage() {
                                             </Group>
                                         </Stack>
 
-                                        <Progress 
-                                            value={(liveProgress.chunks.filter(c => c.status === 'success').length / liveProgress.totalChunks) * 100} 
-                                            color="violet" 
-                                            size="lg" 
+                                        <Progress
+                                            value={(liveProgress.chunks.filter(c => c.status === 'success').length / liveProgress.totalChunks) * 100}
+                                            color="violet"
+                                            size="lg"
                                             radius="xl"
                                             animated
                                         />
 
                                         <Stack gap="xs">
                                             {liveProgress.chunks.map((chunk) => (
-                                                <Group key={chunk.chunk} justify="space-between" p="xs" style={{ 
-                                                    background: chunk.status === 'success' ? 'rgba(16, 185, 129, 0.1)' : 
-                                                               chunk.status === 'error' ? 'rgba(239, 68, 68, 0.1)' :
-                                                               ['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status) ? 'rgba(99, 102, 241, 0.1)' : 
-                                                               'rgba(0, 0, 0, 0.02)',
+                                                <Group key={chunk.chunk} justify="space-between" p="xs" style={{
+                                                    background: chunk.status === 'success' ? 'rgba(16, 185, 129, 0.1)' :
+                                                        chunk.status === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                                                            ['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status) ? 'rgba(99, 102, 241, 0.1)' :
+                                                                'rgba(0, 0, 0, 0.02)',
                                                     borderRadius: '8px',
                                                     transition: 'all 0.3s ease'
                                                 }}>
@@ -792,7 +792,7 @@ export function DashboardPage() {
                                         </Group>
 
                                         {(() => {
-                                            const totalDuplicates = chunkInfo.chunks.reduce((sum, chunk) => 
+                                            const totalDuplicates = chunkInfo.chunks.reduce((sum, chunk) =>
                                                 sum + ((chunk as any).duplicates_removed || 0), 0
                                             );
                                             return totalDuplicates > 0 && (
@@ -878,9 +878,9 @@ export function DashboardPage() {
                                                     ✕
                                                 </ActionIcon>
                                             </Group>
-                                            
+
                                             <Divider />
-                                            
+
                                             <div>
                                                 <Text size="sm" fw={500} mb="sm">
                                                     Do you agree with this rating?
