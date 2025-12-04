@@ -1,0 +1,36 @@
+services:
+  # Backend API Service
+  - type: web
+    name: dataweave-backend
+    runtime: python
+    buildCommand: pip install -r Assignment_r/requirements.txt
+    startCommand: cd Assignment_r && uvicorn backend:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: OPENAI_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: MONGODB_ATLAS_URI
+        sync: false  # Set this in Render dashboard (optional)
+      - key: LLM_MODEL
+        value: gpt-4o-mini
+      - key: LLM_TEMPERATURE
+        value: 0.0
+      - key: LEARNING_ENABLED
+        value: false
+    healthCheckPath: /
+
+  # Frontend Service
+  - type: web
+    name: dataweave-frontend
+    runtime: node
+    buildCommand: cd ai-doc-processor-frontend && npm install && npm run build
+    startCommand: cd ai-doc-processor-frontend && npm run preview -- --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: 18.17.0
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: dataweave-backend
+          envVarKey: RENDER_EXTERNAL_URL
