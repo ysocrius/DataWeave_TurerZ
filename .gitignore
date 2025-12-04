@@ -260,6 +260,9 @@ results/
 !Expected*.xlsx
 !Data*.pdf
 
+# Allow React Results component folder
+!ai-doc-processor-frontend/src/components/Results/
+
 # Log files
 *.log
 logs/
