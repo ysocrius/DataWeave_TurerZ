@@ -6,14 +6,31 @@ This ensures proper module loading in production environments
 
 import sys
 import os
+import logging
 
-# Add current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Import the FastAPI app
-from backend import app
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+try:
+    # Add current directory to Python path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, current_dir)
+    logger.info(f"Added {current_dir} to Python path")
+    
+    # Import the FastAPI app
+    logger.info("Importing FastAPI app...")
+    from backend import app
+    logger.info("FastAPI app imported successfully")
+    
+    if __name__ == "__main__":
+        import uvicorn
+        port = int(os.environ.get("PORT", 8000))
+        logger.info(f"Starting uvicorn server on port {port}")
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+        
+except Exception as e:
+    logger.error(f"Failed to start application: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
