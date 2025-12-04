@@ -241,6 +241,11 @@ def create_intelligent_chunks(full_text: str, total_pages: int) -> List[Dict[str
 
 app = FastAPI(title="AI Document Processor API")
 
+@app.get("/")
+async def root():
+    """Root endpoint for basic connectivity test"""
+    return {"message": "AI Document Processor API", "status": "running"}
+
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
@@ -725,28 +730,35 @@ async def get_session_details(session_id: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Extended health check including learning system status"""
-    health = {
-        "status": "ok",
-        "api": "running",
-        "learning_enabled": Config.LEARNING_ENABLED
-    }
-    
-    if Config.LEARNING_ENABLED:
-        learning_sys = get_performance_tracker().learning_system
-        health["learning_connected"] = learning_sys.is_connected()
+    """Simple health check for deployment"""
+    try:
+        health = {
+            "status": "ok",
+            "api": "running",
+            "timestamp": time.time()
+        }
         
-        if learning_sys.is_connected():
-            health["learning_status"] = "connected"
+        # Only check learning system if enabled and avoid errors
+        if Config.LEARNING_ENABLED:
+            try:
+                learning_sys = get_performance_tracker().learning_system
+                health["learning_enabled"] = True
+                health["learning_connected"] = learning_sys.is_connected()
+            except Exception as e:
+                health["learning_enabled"] = True
+                health["learning_error"] = str(e)
+                health["learning_connected"] = False
         else:
-            health["learning_status"] = "disconnected"
+            health["learning_enabled"] = False
         
-        # Add scheduler status
-        scheduler_status = get_scheduler_status()
-        health["scheduler_running"] = scheduler_status["running"]
-        health["scheduled_jobs"] = len(scheduler_status["jobs"])
-    
-    return health
+        return health
+    except Exception as e:
+        return {
+            "status": "error",
+            "api": "running",
+            "error": str(e),
+            "timestamp": time.time()
+        }
 
 
 @app.post("/api/learning/learn-patterns")
