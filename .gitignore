@@ -475,3 +475,9 @@ setup-github-metadata.ps1
 restart_servers.ps1
 convert_to_docx.py
 hr-interview-files/
+
+# Enhancement documentation (internal development)
+Assignment_r/IMPLEMENTATION_SUMMARY.md
+Assignment_r/ENHANCEMENT_SUMMARY.md
+Assignment_r/enhanced_method_1_position_tracking.md
+archive/documentation/docs/parallel-processing-enhancement-plan.md
