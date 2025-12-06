@@ -23,13 +23,14 @@ import {
     ActionIcon,
     Paper,
 } from '@mantine/core';
-import { IconInfoCircle, IconUpload, IconFileAnalytics, IconCheck, IconRefresh, IconClock, IconFileStack, IconLoader, IconChartBar, IconMessageCircle, IconStar, IconEdit } from '@tabler/icons-react';
+import { IconInfoCircle, IconUpload, IconFileAnalytics, IconCheck, IconRefresh, IconClock, IconFileStack, IconLoader, IconChartBar, IconMessageCircle, IconStar, IconEdit, IconServer, IconWifi, IconWifiOff } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 
 import { FileDropZone } from '@/components/FileUpload/DropZone';
 import { FileCard } from '@/components/FileUpload/FileCard';
 import { StatusCard } from '@/components/Processing/StatusCard';
 import type { ProcessingStatus } from '@/components/Processing/StatusCard';
+import { useBackendStatus } from '@/hooks/useBackendStatus';
 
 import { DataTable } from '@/components/Results/DataTable';
 import { JSONViewer } from '@/components/Results/JSONViewer';
@@ -54,6 +55,9 @@ export function DashboardPage() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>('idle');
     const [result, setResult] = useState<ProcessingResult | null>(null);
+    
+    // Backend status monitoring
+    const { status: backendStatus, health, isOnline, refresh: refreshBackend } = useBackendStatus();
     const [rawJSON, setRawJSON] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -1028,11 +1032,46 @@ export function DashboardPage() {
                                         📊 Quick Stats
                                     </Text>
                                     <Group justify="space-between">
-                                        <Text size="sm" c="dimmed">File Status</Text>
-                                        <Text size="sm" fw={500} c={selectedFile ? 'violet' : 'dimmed'}>
-                                            {selectedFile ? 'Ready' : 'Waiting'}
-                                        </Text>
+                                        <Group gap="xs">
+                                            <Text size="sm" c="dimmed">Backend Status</Text>
+                                            {backendStatus === 'checking' && <IconLoader size={14} />}
+                                            {backendStatus === 'online' && <IconWifi size={14} color="green" />}
+                                            {(backendStatus === 'offline' || backendStatus === 'error') && <IconWifiOff size={14} color="red" />}
+                                        </Group>
+                                        <Group gap="xs">
+                                            <Text 
+                                                size="sm" 
+                                                fw={500} 
+                                                c={
+                                                    backendStatus === 'online' ? 'green' : 
+                                                    backendStatus === 'checking' ? 'yellow' : 
+                                                    'red'
+                                                }
+                                            >
+                                                {backendStatus === 'checking' ? 'Checking...' :
+                                                 backendStatus === 'online' ? 'Online' :
+                                                 backendStatus === 'offline' ? 'Offline' : 'Error'}
+                                            </Text>
+                                            {(backendStatus === 'offline' || backendStatus === 'error') && (
+                                                <ActionIcon 
+                                                    size="sm" 
+                                                    variant="subtle" 
+                                                    onClick={refreshBackend}
+                                                    title="Retry connection"
+                                                >
+                                                    <IconRefresh size={12} />
+                                                </ActionIcon>
+                                            )}
+                                        </Group>
                                     </Group>
+                                    {selectedFile && (
+                                        <Group justify="space-between">
+                                            <Text size="sm" c="dimmed">File Status</Text>
+                                            <Text size="sm" fw={500} c="violet">
+                                                Ready
+                                            </Text>
+                                        </Group>
+                                    )}
                                     {result && (
                                         <>
                                             <Group justify="space-between">
