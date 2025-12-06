@@ -152,7 +152,7 @@ export function DashboardPage() {
             // Character-based processing (default and only mode)
             setProcessingStatus('analyzing');
 
-            // Reset live progress for character processing
+            // Reset live progress for semantic processing
             setLiveProgress({
                 isStreaming: true,
                 totalChunks: 0,
@@ -651,7 +651,7 @@ export function DashboardPage() {
                                             <Group>
                                                 <Loader size="sm" color="blue" />
                                                 <Text size="lg" fw={600}>
-                                                    📝 Character Processing
+                                                    📝 Semantic Processing
                                                 </Text>
                                             </Group>
                                             <Group gap="xs">
@@ -665,7 +665,7 @@ export function DashboardPage() {
                                             </Group>
                                         </Group>
 
-                                        {/* Character Processing Phases */}
+                                        {/* Semantic Processing Phases */}
                                         <Stack gap="xs">
                                             <Group gap="sm">
                                                 {liveProgress.analysisPhase === 'analyzing' && <Loader size="xs" color="blue" />}
@@ -678,7 +678,7 @@ export function DashboardPage() {
                                                 {liveProgress.totalChunks > 0 && liveProgress.chunks.filter(c => c.status === 'success').length < liveProgress.totalChunks && <Loader size="xs" color="blue" />}
                                                 {liveProgress.chunks.filter(c => c.status === 'success').length === liveProgress.totalChunks && liveProgress.totalChunks > 0 && <IconCheck size={16} color="green" />}
                                                 <Text size="sm" c={liveProgress.chunks.filter(c => c.status === 'success').length === liveProgress.totalChunks && liveProgress.totalChunks > 0 ? 'teal' : 'dimmed'}>
-                                                    Character Chunk Processing
+                                                    Semantic Chunk Processing
                                                 </Text>
                                             </Group>
                                             <Group gap="sm">

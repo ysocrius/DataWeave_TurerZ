@@ -145,7 +145,7 @@ class ProcessingService {
 
 
   /**
-   * Process a PDF file using character-based chunking with real-time SSE progress
+   * Process a PDF file using enhanced semantic chunking with batch parallel processing and context memory
    */
   async processPDF(
     file: File,
@@ -170,7 +170,7 @@ class ProcessingService {
     formData.append('file', file);
 
     return new Promise((resolve, reject) => {
-      fetch(`${this.API_BASE_URL}/api/process`, {
+      fetch(`${this.API_BASE_URL}/api/process-enhanced`, {
         method: 'POST',
         body: formData,
       })
