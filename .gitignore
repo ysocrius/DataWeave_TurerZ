@@ -469,4 +469,7 @@ metrics/
 !Expected\ Output.xlsx
 # Project organization files (internal use only)
 FILE_ORGANIZATION_SUMMARY.md
+DEMO_PREP_GUIDE.md
+setup-github-metadata.ps1
+*.code-workspace
 restart_servers.ps1
