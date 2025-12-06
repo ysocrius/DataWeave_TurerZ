@@ -15,6 +15,12 @@
 **Backend API:** [https://dataweave-turerz.onrender.com](https://dataweave-turerz.onrender.com)  
 **API Documentation:** [https://dataweave-turerz.onrender.com/docs](https://dataweave-turerz.onrender.com/docs)
 
+### 📸 **Application Screenshot**
+
+![AI Document Processor Interface](assets/image.png)
+
+*The application interface showing real-time PDF processing with analytics dashboard, extraction results, and system performance metrics.*
+
 ## 🎯 **The Problem This Solves**
 
 This application solves the **"Unstructured Data to Structured Data"** problem - a common challenge in data processing and document management.
