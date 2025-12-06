@@ -473,3 +473,5 @@ DEMO_PREP_GUIDE.md
 setup-github-metadata.ps1
 *.code-workspace
 restart_servers.ps1
+convert_to_docx.py
+hr-interview-files/
