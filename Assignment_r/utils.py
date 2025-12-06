@@ -143,6 +143,38 @@ def normalize_keys(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return normalized_entries
 
 
+def normalize_entry_keys(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Normalize entry keys to lowercase for consistency
+    Handles LLM returning "Key"/"Value" vs "key"/"value"
+    
+    Args:
+        entries: List of entries with potentially inconsistent key casing
+        
+    Returns:
+        Entries with normalized lowercase keys
+    """
+    normalized_entries = []
+    
+    for entry in entries:
+        normalized_entry = {}
+        for key, value in entry.items():
+            # Normalize common key variations
+            if key in ['Key', 'KEY']:
+                normalized_entry['key'] = value
+            elif key in ['Value', 'VALUE']:
+                normalized_entry['value'] = value
+            elif key in ['Comments', 'COMMENTS', 'Comment', 'COMMENT']:
+                normalized_entry['comments'] = value
+            else:
+                # Keep other keys as lowercase
+                normalized_entry[key.lower()] = value
+        
+        normalized_entries.append(normalized_entry)
+    
+    return normalized_entries
+
+
 def extract_entries_and_notes(data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str]:
     """
     Extract entries and global notes from parsed JSON
@@ -172,6 +204,9 @@ def extract_entries_and_notes(data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]
         global_notes = None
     else:
         raise ValueError(f"Unexpected data type: {type(data)}")
+    
+    # Normalize entry keys for consistency
+    entries = normalize_entry_keys(entries)
     
     # Convert None to empty string for consistency
     if global_notes is None:

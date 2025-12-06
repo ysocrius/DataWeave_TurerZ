@@ -27,6 +27,9 @@ import pandas as pd
 from performance_tracker import get_performance_tracker
 from learning_scheduler import start_scheduler, stop_scheduler, get_scheduler_status
 
+# Import position tracking
+from position_tracker import fix_entry_ordering_enhanced_method_1
+
 # Character-based Chunking Functions
 def sort_entries_logically(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -378,6 +381,10 @@ async def process_pdf(file: UploadFile = File(...)):
                     parsed_data = clean_and_parse_json(raw_llm_response)
                     chunk_entries = parsed_data.get('entries', [])
                     
+                    # Add chunk_id to each entry for position tracking
+                    for entry in chunk_entries:
+                        entry['chunk_id'] = i  # Use chunk index (i) as chunk_id
+                    
                     chunk_end_time = time.time()
                     chunk_duration = round(chunk_end_time - chunk_start_time, 2)
                     
@@ -451,10 +458,19 @@ async def process_pdf(file: UploadFile = File(...)):
             yield f"data: {json.dumps({'event': 'dedup_complete', 'stats': dedup_stats})}\n\n"
             await asyncio.sleep(0.1)
             
-            # Sort and add row numbers
-            sorted_entries = sort_entries_logically(deduplicated_entries)
+            # Phase 4: Enhanced Position Tracking (Fix Row Order)
+            yield f"data: {json.dumps({'event': 'position_tracking_start', 'status': 'fixing_row_order'})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            # Apply Enhanced Method 1 position tracking
+            sorted_entries = fix_entry_ordering_enhanced_method_1(deduplicated_entries, full_text, char_chunks)
+            
+            # Add row numbers
             for i, entry in enumerate(sorted_entries, 1):
                 entry['#'] = i
+            
+            yield f"data: {json.dumps({'event': 'position_tracking_complete', 'status': 'row_order_fixed', 'total_entries': len(sorted_entries)})}\n\n"
+            await asyncio.sleep(0.1)
             
             # Add global notes to first entry
             if global_notes and len(sorted_entries) > 0:
