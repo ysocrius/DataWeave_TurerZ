@@ -52,7 +52,9 @@ export interface ProcessingJob {
 // SSE Event Types
 export interface ChunkProgressEvent {
   event: 'start' | 'chunk_start' | 'chunk_progress' | 'chunk_complete' | 'complete' | 'error' |
-  'analysis_start' | 'analysis_complete' | 'merging_start' | 'intelligent_complete' | 'character_complete';
+  'analysis_start' | 'analysis_complete' | 'merging_start' | 'intelligent_complete' | 'character_complete' |
+  'enhanced_complete' | 'semantic_complete' | 'context_initialized' | 'batch_processing_start' | 
+  'batch_processing_complete' | 'dedup_progress' | 'dedup_complete' | 'position_tracking_start' | 'position_tracking_complete';
   chunk?: number;
   total_chunks?: number;
   page_range?: string;
@@ -108,6 +110,180 @@ class ProcessingService {
   }
 
 
+
+  /**
+   * Process text input using enhanced semantic chunking with batch parallel processing and context memory
+   */
+  async processText(
+    text: string,
+    onProgress: ChunkProgressCallback
+  ): Promise<ChunkedProcessingResult> {
+    // Validate text
+    if (!text.trim()) {
+      throw new Error('Text input is empty. Please provide some text to process.');
+    }
+
+    if (text.length > 50000) {
+      throw new Error('Text is too long. Please limit to 50,000 characters.');
+    }
+
+    return new Promise((resolve, reject) => {
+      fetch(`${this.API_BASE_URL}/api/process-text`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: text }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `Server error: ${response.status}`);
+          }
+
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error('Failed to read response stream');
+          }
+
+          let buffer = '';
+          let finalResult: ChunkedProcessingResult | null = null;
+
+          const processStream = async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) break;
+
+                buffer += new TextDecoder().decode(value);
+                
+                // SSE events are separated by double newlines
+                const events = buffer.split('\n\n');
+                buffer = events.pop() || '';
+
+                for (const event of events) {
+                  const lines = event.split('\n');
+                  for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                      try {
+                        const eventData = JSON.parse(line.slice(6));
+                        
+                        if (eventData.event === 'enhanced_complete' || eventData.event === 'semantic_complete') {
+                          finalResult = eventData as ChunkedProcessingResult;
+                        }
+                        
+                        onProgress(eventData);
+                      } catch (parseError) {
+                        console.warn('Failed to parse SSE data:', line);
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (finalResult) {
+                resolve(finalResult);
+              } else {
+                throw new Error('Processing completed but no final result received');
+              }
+            } catch (streamError) {
+              reject(streamError);
+            }
+          };
+
+          processStream();
+        })
+        .catch((error) => {
+          reject(error);
+        });
+    });
+  }
+
+  /**
+   * Process file from file path using enhanced semantic chunking with SSE streaming
+   */
+  async processFilePath(
+    filePath: string,
+    onProgress: ChunkProgressCallback
+  ): Promise<ChunkedProcessingResult> {
+    // Validate file path
+    if (!filePath.trim()) {
+      throw new Error('File path is empty. Please provide a valid file path.');
+    }
+
+    return new Promise((resolve, reject) => {
+      fetch(`${this.API_BASE_URL}/api/process-filepath`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ file_path: filePath }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `Server error: ${response.status}`);
+          }
+
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error('Failed to read response stream');
+          }
+
+          let buffer = '';
+          let finalResult: ChunkedProcessingResult | null = null;
+
+          const processStream = async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) break;
+
+                buffer += new TextDecoder().decode(value);
+                
+                // SSE events are separated by double newlines
+                const events = buffer.split('\n\n');
+                buffer = events.pop() || '';
+
+                for (const event of events) {
+                  const lines = event.split('\n');
+                  for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                      try {
+                        const eventData = JSON.parse(line.slice(6));
+                        
+                        if (eventData.event === 'enhanced_complete') {
+                          finalResult = eventData as ChunkedProcessingResult;
+                        }
+                        
+                        onProgress(eventData);
+                      } catch (parseError) {
+                        console.warn('Failed to parse SSE data:', line);
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (finalResult) {
+                resolve(finalResult);
+              } else {
+                throw new Error('Processing completed but no final result received');
+              }
+            } catch (streamError) {
+              reject(streamError);
+            }
+          };
+
+          processStream();
+        })
+        .catch((error) => {
+          reject(error);
+        });
+    });
+  }
 
   /**
    * Download Excel file
@@ -170,7 +346,7 @@ class ProcessingService {
     formData.append('file', file);
 
     return new Promise((resolve, reject) => {
-      fetch(`${this.API_BASE_URL}/api/process-enhanced`, {
+      fetch(`${this.API_BASE_URL}/api/process`, {
         method: 'POST',
         body: formData,
       })
@@ -206,7 +382,7 @@ class ProcessingService {
                     const data = JSON.parse(line.slice(6)) as ChunkProgressEvent;
                     onProgress(data);
 
-                    if (data.event === 'character_complete') {
+                    if (data.event === 'enhanced_complete' || data.event === 'character_complete' || data.event === 'semantic_complete') {
                       resolve({
                         entries: data.entries || [],
                         global_notes: data.global_notes,

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
     Container,
     Title,
@@ -22,8 +22,11 @@ import {
     Textarea,
     ActionIcon,
     Paper,
+    Collapse,
+    Transition,
+    ScrollArea,
 } from '@mantine/core';
-import { IconInfoCircle, IconUpload, IconFileAnalytics, IconCheck, IconRefresh, IconClock, IconFileStack, IconLoader, IconChartBar, IconMessageCircle, IconStar, IconEdit, IconServer, IconWifi, IconWifiOff } from '@tabler/icons-react';
+import { IconInfoCircle, IconUpload, IconFileAnalytics, IconCheck, IconRefresh, IconClock, IconFileStack, IconLoader, IconChartBar, IconMessageCircle, IconStar, IconEdit, IconServer, IconWifi, IconWifiOff, IconChevronDown, IconChevronUp, IconFilter } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 
 import { FileDropZone } from '@/components/FileUpload/DropZone';
@@ -78,6 +81,30 @@ export function DashboardPage() {
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [cardDismissed, setCardDismissed] = useState(false);
 
+    // Text input processing state
+    const [textInput, setTextInput] = useState<string>('');
+    const [isProcessingText, setIsProcessingText] = useState(false);
+
+    // File path input state
+    const [filePath, setFilePath] = useState<string>('');
+    const [isProcessingFilePath, setIsProcessingFilePath] = useState(false);
+
+    // Active tab state
+    const [activeTab, setActiveTab] = useState<string>('upload');
+
+    // Chunk display state for hybrid view
+    const [chunkDisplay, setChunkDisplay] = useState({
+        mode: 'compact' as 'compact' | 'detailed',
+        filterMode: 'all' as 'all' | 'active' | 'completed' | 'failed',
+        recentCount: 3
+    });
+
+    // Recent completions tracking
+    const [recentCompletions, setRecentCompletions] = useState<LiveChunkStatus[]>([]);
+
+    // Chunk details toggle state
+    const [showChunkDetails, setShowChunkDetails] = useState(false);
+
     // Live streaming progress state
     const [liveProgress, setLiveProgress] = useState<{
         isStreaming: boolean;
@@ -103,6 +130,76 @@ export function DashboardPage() {
         strategy: '',
     });
     const elapsedTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Helper functions for hybrid display
+    const toggleChunkDisplayMode = () => {
+        setChunkDisplay(prev => ({
+            ...prev,
+            mode: prev.mode === 'compact' ? 'detailed' : 'compact'
+        }));
+    };
+
+    const updateRecentCompletions = (chunk: LiveChunkStatus) => {
+        if (chunk.status === 'success') {
+            setRecentCompletions(prev => {
+                const updated = [...prev, chunk];
+                return updated.slice(-chunkDisplay.recentCount); // Keep only recent N
+            });
+        }
+    };
+
+    // Auto-expand on errors, auto-collapse on completion
+    useEffect(() => {
+        const failedChunks = liveProgress.chunks.filter(c => c.status === 'error');
+        
+        // Auto-expand if there are errors and we're in compact mode
+        if (failedChunks.length > 0 && chunkDisplay.mode === 'compact') {
+            setChunkDisplay(prev => ({ 
+                ...prev, 
+                mode: 'detailed', 
+                filterMode: 'failed' 
+            }));
+        }
+    }, [liveProgress.chunks, chunkDisplay.mode]);
+
+    // Auto-collapse after processing completes
+    useEffect(() => {
+        if (processingStatus === 'complete' && chunkDisplay.mode === 'detailed') {
+            const timer = setTimeout(() => {
+                setChunkDisplay(prev => ({ ...prev, mode: 'compact' }));
+            }, 3000); // 3 second delay
+            
+            return () => clearTimeout(timer);
+        }
+    }, [processingStatus, chunkDisplay.mode]);
+
+    // Reset recent completions when starting new processing
+    useEffect(() => {
+        if (liveProgress.isStreaming && liveProgress.elapsedTime === 0) {
+            setRecentCompletions([]);
+        }
+    }, [liveProgress.isStreaming, liveProgress.elapsedTime]);
+
+    const getCurrentChunk = () => {
+        return liveProgress.chunks.find(chunk => 
+            ['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status)
+        );
+    };
+
+    const getFilteredChunks = () => {
+        switch (chunkDisplay.filterMode) {
+            case 'active':
+                return liveProgress.chunks.filter(chunk => 
+                    ['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status)
+                );
+            case 'completed':
+                return liveProgress.chunks.filter(chunk => chunk.status === 'success');
+            case 'failed':
+                return liveProgress.chunks.filter(chunk => chunk.status === 'error');
+            default:
+                return liveProgress.chunks;
+        }
+    };
 
     const handleFileSelect = (file: File) => {
         setSelectedFile(file);
@@ -233,6 +330,20 @@ export function DashboardPage() {
                                 : c
                         ),
                     }));
+                    
+                    // Update recent completions for successful chunks
+                    if (event.status === 'success') {
+                        const completedChunk: LiveChunkStatus = {
+                            chunk: event.chunk || 0,
+                            totalChunks: event.total_chunks || 0,
+                            status: 'success',
+                            entriesCount: event.entries_count,
+                            processingTime: event.processing_time,
+                            pageRange: event.page_range,
+                            sectionType: event.char_range
+                        };
+                        updateRecentCompletions(completedChunk);
+                    }
                 } else if (event.event === 'merging_start') {
                     setLiveProgress(prev => ({ ...prev, mergingPhase: 'merging' }));
                 }
@@ -317,6 +428,335 @@ export function DashboardPage() {
                 color: 'red',
                 autoClose: 8000,
             });
+        }
+    };
+
+    const handleProcessText = async () => {
+        if (!textInput.trim()) return;
+
+        setError(null);
+        setChunkInfo(null);
+        setIsProcessingText(true);
+        setProcessingStatus('analyzing');
+
+        try {
+            // Reset live progress for text processing
+            setLiveProgress({
+                isStreaming: true,
+                totalChunks: 0,
+                totalPages: 1, // Text has 1 "page"
+                currentChunk: 0,
+                chunks: [],
+                elapsedTime: 0,
+                analysisPhase: 'idle',
+                mergingPhase: 'idle',
+                sectionsFound: 0,
+                strategy: '',
+            });
+
+            // Start elapsed time counter
+            const startTime = Date.now();
+            elapsedTimerRef.current = setInterval(() => {
+                setLiveProgress(prev => ({
+                    ...prev,
+                    elapsedTime: Math.round((Date.now() - startTime) / 1000),
+                }));
+            }, 1000);
+
+            const handleTextProgress = (event: ChunkProgressEvent) => {
+                if (event.event === 'analysis_start') {
+                    setLiveProgress(prev => ({ ...prev, analysisPhase: 'analyzing' }));
+                } else if (event.event === 'analysis_complete') {
+                    const initialChunks: LiveChunkStatus[] = [];
+                    for (let i = 1; i <= (event.total_chunks || 0); i++) {
+                        initialChunks.push({
+                            chunk: i,
+                            totalChunks: event.total_chunks || 0,
+                            status: 'pending',
+                        });
+                    }
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        analysisPhase: 'complete',
+                        totalChunks: event.total_chunks || 0,
+                        strategy: `${event.strategy} (text input)`,
+                        chunks: initialChunks,
+                    }));
+                } else if (event.event === 'chunk_start') {
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        currentChunk: event.chunk || 0,
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? {
+                                    ...c,
+                                    status: 'started',
+                                    pageRange: 'Text',
+                                    sectionType: event.section || 'Text Section'
+                                }
+                                : c
+                        ),
+                    }));
+                } else if (event.event === 'chunk_progress') {
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? { ...c, status: event.status as LiveChunkStatus['status'] }
+                                : c
+                        ),
+                    }));
+                } else if (event.event === 'chunk_complete') {
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? {
+                                    ...c,
+                                    status: event.status === 'success' ? 'success' : 'error',
+                                    entriesCount: event.entries_count,
+                                    processingTime: event.processing_time,
+                                    error: event.error,
+                                }
+                                : c
+                        ),
+                    }));
+                    
+                    // Update recent completions for successful chunks
+                    if (event.status === 'success') {
+                        const completedChunk: LiveChunkStatus = {
+                            chunk: event.chunk || 0,
+                            totalChunks: event.total_chunks || 0,
+                            status: 'success',
+                            entriesCount: event.entries_count,
+                            processingTime: event.processing_time,
+                            pageRange: 'Text',
+                            sectionType: event.section || 'Text Section'
+                        };
+                        updateRecentCompletions(completedChunk);
+                    }
+                } else if (event.event === 'merging_start') {
+                    setLiveProgress(prev => ({ ...prev, mergingPhase: 'merging' }));
+                }
+            };
+
+            const textResult = await processingService.processText(
+                textInput,
+                handleTextProgress
+            );
+
+            // Stop elapsed timer
+            if (elapsedTimerRef.current) {
+                clearInterval(elapsedTimerRef.current);
+            }
+
+            setLiveProgress(prev => ({ ...prev, isStreaming: false, mergingPhase: 'complete' }));
+            setChunkInfo(textResult);
+            setResult({
+                entries: textResult.entries,
+                global_notes: textResult.global_notes,
+                session_id: textResult.session_id,
+                processing_time: textResult.processing_time
+            });
+            setRawJSON(JSON.stringify(textResult, null, 2));
+            setProcessingStatus('complete');
+            setFeedbackSubmitted(false);
+            setCardDismissed(false);
+
+            notifications.show({
+                id: 'text-processing-complete',
+                title: 'Text Processing Complete!',
+                message: `Processed ${textResult.total_chunks} semantic chunks in ${textResult.processing_time}s, extracted ${textResult.entries.length} rows`,
+                color: 'teal',
+                autoClose: 5000,
+            });
+
+        } catch (err: any) {
+            // Clean up timer on error
+            if (elapsedTimerRef.current) {
+                clearInterval(elapsedTimerRef.current);
+            }
+            setLiveProgress(prev => ({ ...prev, isStreaming: false }));
+
+            const errorMessage = err.message || 'Text processing failed';
+            setError(errorMessage);
+            setProcessingStatus('error');
+
+            notifications.show({
+                id: 'text-processing-error',
+                title: 'Text Processing Failed',
+                message: errorMessage,
+                color: 'red',
+                autoClose: 8000,
+            });
+        } finally {
+            setIsProcessingText(false);
+        }
+    };
+
+    const handleProcessFilePath = async () => {
+        if (!filePath.trim()) return;
+
+        setError(null);
+        setChunkInfo(null);
+        setIsProcessingFilePath(true);
+        setProcessingStatus('analyzing');
+
+        try {
+            // Reset live progress
+            setLiveProgress({
+                isStreaming: true,
+                totalChunks: 0,
+                totalPages: 0,
+                currentChunk: 0,
+                chunks: [],
+                elapsedTime: 0,
+                analysisPhase: 'idle',
+                mergingPhase: 'idle',
+                sectionsFound: 0,
+                strategy: '',
+            });
+
+            // Start elapsed time counter
+            const startTime = Date.now();
+            elapsedTimerRef.current = setInterval(() => {
+                setLiveProgress(prev => ({
+                    ...prev,
+                    elapsedTime: Math.round((Date.now() - startTime) / 1000),
+                }));
+            }, 1000);
+
+            const handleProgress = (event: ChunkProgressEvent) => {
+                if (event.event === 'analysis_start') {
+                    setLiveProgress(prev => ({ ...prev, analysisPhase: 'analyzing' }));
+                } else if (event.event === 'analysis_complete') {
+                    const initialChunks: LiveChunkStatus[] = [];
+                    for (let i = 1; i <= (event.total_chunks || 0); i++) {
+                        initialChunks.push({
+                            chunk: i,
+                            totalChunks: event.total_chunks || 0,
+                            status: 'pending',
+                        });
+                    }
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        analysisPhase: 'complete',
+                        totalChunks: event.total_chunks || 0,
+                        totalPages: event.total_pages || 0,
+                        strategy: event.strategy || '',
+                        chunks: initialChunks,
+                    }));
+                } else if (event.event === 'chunk_start') {
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        currentChunk: event.chunk || 0,
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? {
+                                    ...c,
+                                    status: 'started',
+                                    pageRange: event.page_range,
+                                    sectionType: event.section,
+                                    header: event.header
+                                }
+                                : c
+                        ),
+                    }));
+                } else if (event.event === 'chunk_progress') {
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? { ...c, status: event.status as LiveChunkStatus['status'] }
+                                : c
+                        ),
+                    }));
+                } else if (event.event === 'chunk_complete') {
+                    setLiveProgress(prev => ({
+                        ...prev,
+                        chunks: prev.chunks.map(c =>
+                            c.chunk === event.chunk
+                                ? {
+                                    ...c,
+                                    status: event.status === 'success' ? 'success' : 'error',
+                                    entriesCount: event.entries_count,
+                                    processingTime: event.processing_time,
+                                    error: event.error,
+                                }
+                                : c
+                        ),
+                    }));
+                    
+                    // Update recent completions for successful chunks
+                    if (event.status === 'success') {
+                        const completedChunk: LiveChunkStatus = {
+                            chunk: event.chunk || 0,
+                            totalChunks: event.total_chunks || 0,
+                            status: 'success',
+                            entriesCount: event.entries_count,
+                            processingTime: event.processing_time,
+                            pageRange: event.page_range,
+                            sectionType: event.section,
+                            header: event.header
+                        };
+                        updateRecentCompletions(completedChunk);
+                    }
+                } else if (event.event === 'merging_start') {
+                    setLiveProgress(prev => ({ ...prev, mergingPhase: 'merging' }));
+                }
+            };
+
+            const filePathResult = await processingService.processFilePath(
+                filePath,
+                handleProgress
+            );
+
+            // Stop elapsed timer
+            if (elapsedTimerRef.current) {
+                clearInterval(elapsedTimerRef.current);
+            }
+
+            setLiveProgress(prev => ({ ...prev, isStreaming: false, mergingPhase: 'complete' }));
+            setChunkInfo(filePathResult);
+            setResult({
+                entries: filePathResult.entries,
+                global_notes: filePathResult.global_notes,
+                session_id: filePathResult.session_id,
+                processing_time: filePathResult.processing_time
+            });
+            setRawJSON(JSON.stringify(filePathResult, null, 2));
+            setProcessingStatus('complete');
+            setFeedbackSubmitted(false);
+            setCardDismissed(false);
+
+            notifications.show({
+                id: 'filepath-processing-complete',
+                title: 'File Processing Complete!',
+                message: `Processed ${filePathResult.total_chunks} chunks in ${filePathResult.processing_time}s, extracted ${filePathResult.entries.length} rows`,
+                color: 'teal',
+                autoClose: 5000,
+            });
+
+        } catch (err: any) {
+            // Clean up timer on error
+            if (elapsedTimerRef.current) {
+                clearInterval(elapsedTimerRef.current);
+            }
+            setLiveProgress(prev => ({ ...prev, isStreaming: false }));
+
+            const errorMessage = err.message || 'File path processing failed';
+            setError(errorMessage);
+            setProcessingStatus('error');
+
+            notifications.show({
+                id: 'filepath-processing-error',
+                title: 'File Processing Failed',
+                message: errorMessage,
+                color: 'red',
+                autoClose: 8000,
+            });
+        } finally {
+            setIsProcessingFilePath(false);
         }
     };
 
@@ -587,109 +1027,184 @@ export function DashboardPage() {
                     {/* Left Column - Upload & Processing */}
                     <Grid.Col span={{ base: 12, md: 8 }}>
                         <Stack gap="lg">
-                            {/* Upload Section */}
+                            {/* Tabbed Input Interface */}
                             <Card shadow="sm" padding="xl" radius="lg" withBorder style={{ overflow: 'visible' }}>
-                                <Stack gap="md">
-                                    <Group>
-                                        <ThemeIcon size="lg" radius="md" variant="light" color="violet">
-                                            <IconUpload size={20} />
-                                        </ThemeIcon>
-                                        <Text size="lg" fw={600}>
-                                            Upload Document
-                                        </Text>
-                                    </Group>
+                                <Tabs value={activeTab} onChange={setActiveTab} variant="pills" radius="md">
+                                    <Tabs.List grow mb="lg">
+                                        <Tabs.Tab 
+                                            value="upload" 
+                                            leftSection={<IconUpload size={18} />}
+                                            style={{ fontSize: '14px', fontWeight: 600 }}
+                                        >
+                                            📄 Upload PDF
+                                        </Tabs.Tab>
+                                        <Tabs.Tab 
+                                            value="filepath" 
+                                            leftSection={<IconFileStack size={18} />}
+                                            style={{ fontSize: '14px', fontWeight: 600 }}
+                                        >
+                                            📁 File Path
+                                            <Badge size="xs" color="grape" variant="light" ml="xs">Dev</Badge>
+                                        </Tabs.Tab>
+                                        <Tabs.Tab 
+                                            value="text" 
+                                            leftSection={<IconEdit size={18} />}
+                                            style={{ fontSize: '14px', fontWeight: 600 }}
+                                        >
+                                            ✏️ Text Input
+                                            <Badge size="xs" color="blue" variant="light" ml="xs">Dev</Badge>
+                                        </Tabs.Tab>
+                                    </Tabs.List>
 
-                                    {!selectedFile ? (
-                                        <FileDropZone
-                                            onFileSelect={handleFileSelect}
-                                            disabled={processingStatus !== 'idle' && processingStatus !== 'complete'}
-                                        />
-                                    ) : (
-                                        <FileCard
-                                            file={{
-                                                name: selectedFile.name,
-                                                size: selectedFile.size,
-                                            }}
-                                            onRemove={handleRemoveFile}
-                                        />
-                                    )}
+                                    {/* PDF Upload Tab */}
+                                    <Tabs.Panel value="upload">
+                                        <Stack gap="md">
+                                            {!selectedFile ? (
+                                                <FileDropZone
+                                                    onFileSelect={handleFileSelect}
+                                                    disabled={processingStatus !== 'idle' && processingStatus !== 'complete'}
+                                                />
+                                            ) : (
+                                                <FileCard
+                                                    file={{
+                                                        name: selectedFile.name,
+                                                        size: selectedFile.size,
+                                                    }}
+                                                    onRemove={handleRemoveFile}
+                                                />
+                                            )}
 
-                                    {selectedFile && processingStatus === 'idle' && (
-                                        <>
-                                            <Card padding="md" withBorder style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
-                                                <Stack gap="sm">
-                                                    <Group>
-                                                        <Text size="sm" fw={600} c="blue">📝 Processing Mode</Text>
-                                                        <Badge size="sm" color="violet" variant="light">Semantic Chunking</Badge>
-                                                    </Group>
-                                                    <Text size="xs" c="dimmed">
-                                                        Intelligent content-aware chunking that breaks documents at natural section boundaries for superior data extraction quality and context preservation.
-                                                    </Text>
-                                                </Stack>
-                                            </Card>
+                                            {selectedFile && processingStatus === 'idle' && (
+                                                <>
+                                                    <Card padding="md" withBorder style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
+                                                        <Stack gap="sm">
+                                                            <Group>
+                                                                <Text size="sm" fw={600} c="blue">📝 Processing Mode</Text>
+                                                                <Badge size="sm" color="violet" variant="light">Semantic Chunking</Badge>
+                                                            </Group>
+                                                            <Text size="xs" c="dimmed">
+                                                                Intelligent content-aware chunking that breaks documents at natural section boundaries for superior data extraction quality and context preservation.
+                                                            </Text>
+                                                        </Stack>
+                                                    </Card>
+                                                    <Button
+                                                        size="lg"
+                                                        fullWidth
+                                                        onClick={handleProcess}
+                                                        leftSection={<IconFileStack size={20} />}
+                                                        variant="gradient"
+                                                        gradient={{ from: 'violet', to: 'indigo' }}
+                                                        style={{ transition: 'transform 0.2s' }}
+                                                    >
+                                                        📝 Process Document
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </Stack>
+                                    </Tabs.Panel>
+
+                                    {/* File Path Tab */}
+                                    <Tabs.Panel value="filepath">
+                                        <Stack gap="md">
+                                            <Textarea
+                                                placeholder="Paste file path here (e.g., C:\Users\...\file.pdf)"
+                                                minRows={3}
+                                                maxRows={4}
+                                                autosize
+                                                value={filePath}
+                                                onChange={(event) => setFilePath(event.currentTarget.value)}
+                                                styles={{
+                                                    input: {
+                                                        fontSize: '14px',
+                                                        fontFamily: 'monospace'
+                                                    }
+                                                }}
+                                            />
+                                            
                                             <Button
                                                 size="lg"
                                                 fullWidth
-                                                onClick={handleProcess}
-                                                leftSection={<IconFileStack size={20} />}
                                                 variant="gradient"
-                                                gradient={{ from: 'violet', to: 'indigo' }}
-                                                style={{ transition: 'transform 0.2s' }}
+                                                gradient={{ from: 'grape', to: 'violet' }}
+                                                leftSection={<IconFileAnalytics size={18} />}
+                                                disabled={!filePath.trim() || isProcessingFilePath || processingStatus !== 'idle'}
+                                                loading={isProcessingFilePath}
+                                                onClick={handleProcessFilePath}
                                             >
-                                                📝 Process Document
+                                                {isProcessingFilePath ? 'Processing File...' : 'Process File from Path'}
                                             </Button>
-                                        </>
-                                    )}
-                                </Stack>
+                                            
+                                            <Text size="xs" c="dimmed" ta="center">
+                                                Load and process a PDF file directly from a file path. Useful for testing with specific files.
+                                            </Text>
+                                        </Stack>
+                                    </Tabs.Panel>
+
+                                    {/* Text Input Tab */}
+                                    <Tabs.Panel value="text">
+                                        <Stack gap="md">
+                                            <Textarea
+                                                placeholder="Paste your text here to test semantic chunking without uploading a PDF..."
+                                                minRows={6}
+                                                maxRows={10}
+                                                autosize
+                                                value={textInput}
+                                                onChange={(event) => setTextInput(event.currentTarget.value)}
+                                                styles={{
+                                                    input: {
+                                                        fontSize: '14px',
+                                                        fontFamily: 'monospace'
+                                                    }
+                                                }}
+                                            />
+                                            
+                                            <Button
+                                                size="lg"
+                                                fullWidth
+                                                variant="gradient"
+                                                gradient={{ from: 'blue', to: 'cyan' }}
+                                                leftSection={<IconFileAnalytics size={18} />}
+                                                disabled={!textInput.trim() || isProcessingText || processingStatus !== 'idle'}
+                                                loading={isProcessingText}
+                                                onClick={handleProcessText}
+                                            >
+                                                {isProcessingText ? 'Processing Text...' : 'Process Text'}
+                                            </Button>
+                                            
+                                            <Text size="xs" c="dimmed" ta="center">
+                                                This feature allows testing semantic chunking with raw text input. Perfect for development and debugging.
+                                            </Text>
+                                        </Stack>
+                                    </Tabs.Panel>
+                                </Tabs>
                             </Card>
 
-                            {/* Live Chunk Progress */}
+                            {/* Hybrid Live Progress Display */}
                             {liveProgress.isStreaming && (
                                 <Card shadow="sm" padding="lg" radius="lg" withBorder style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)' }}>
                                     <Stack gap="md">
+                                        {/* Compact Header - Always Visible */}
                                         <Group justify="space-between">
-                                            <Group>
+                                            <Group gap="sm">
                                                 <Loader size="sm" color="blue" />
                                                 <Text size="lg" fw={600}>
-                                                    📝 Semantic Processing
+                                                    📝 Processing: {liveProgress.chunks.filter(c => c.status === 'success').length}/{liveProgress.totalChunks} chunks
                                                 </Text>
-                                            </Group>
-                                            <Group gap="xs">
                                                 <Badge color="blue" variant="light" leftSection={<IconClock size={12} />}>
                                                     {liveProgress.elapsedTime}s elapsed
                                                 </Badge>
-
-                                                <Badge color="violet" variant="light">
-                                                    {liveProgress.chunks.filter(c => c.status === 'success').length}/{liveProgress.totalChunks} chunks
-                                                </Badge>
                                             </Group>
+                                            <Button 
+                                                variant="subtle" 
+                                                size="sm"
+                                                onClick={toggleChunkDisplayMode}
+                                                rightSection={chunkDisplay.mode === 'detailed' ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                                            >
+                                                {chunkDisplay.mode === 'detailed' ? 'Hide Details' : 'Show Details'}
+                                            </Button>
                                         </Group>
 
-                                        {/* Semantic Processing Phases */}
-                                        <Stack gap="xs">
-                                            <Group gap="sm">
-                                                {liveProgress.analysisPhase === 'analyzing' && <Loader size="xs" color="blue" />}
-                                                {liveProgress.analysisPhase === 'complete' && <IconCheck size={16} color="green" />}
-                                                <Text size="sm" c={liveProgress.analysisPhase === 'complete' ? 'teal' : 'dimmed'}>
-                                                    Text Extraction & Analysis
-                                                </Text>
-                                            </Group>
-                                            <Group gap="sm">
-                                                {liveProgress.totalChunks > 0 && liveProgress.chunks.filter(c => c.status === 'success').length < liveProgress.totalChunks && <Loader size="xs" color="blue" />}
-                                                {liveProgress.chunks.filter(c => c.status === 'success').length === liveProgress.totalChunks && liveProgress.totalChunks > 0 && <IconCheck size={16} color="green" />}
-                                                <Text size="sm" c={liveProgress.chunks.filter(c => c.status === 'success').length === liveProgress.totalChunks && liveProgress.totalChunks > 0 ? 'teal' : 'dimmed'}>
-                                                    Semantic Chunk Processing
-                                                </Text>
-                                            </Group>
-                                            <Group gap="sm">
-                                                {liveProgress.mergingPhase === 'merging' && <Loader size="xs" color="blue" />}
-                                                {liveProgress.mergingPhase === 'complete' && <IconCheck size={16} color="green" />}
-                                                <Text size="sm" c={liveProgress.mergingPhase === 'complete' ? 'teal' : 'dimmed'}>
-                                                    Merging & Deduplication
-                                                </Text>
-                                            </Group>
-                                        </Stack>
-
+                                        {/* Progress Bar - Always Visible */}
                                         <Progress
                                             value={(liveProgress.chunks.filter(c => c.status === 'success').length / liveProgress.totalChunks) * 100}
                                             color="violet"
@@ -698,52 +1213,140 @@ export function DashboardPage() {
                                             animated
                                         />
 
-                                        <Stack gap="xs">
-                                            {liveProgress.chunks.map((chunk) => (
-                                                <Group key={chunk.chunk} justify="space-between" p="xs" style={{
-                                                    background: chunk.status === 'success' ? 'rgba(16, 185, 129, 0.1)' :
-                                                        chunk.status === 'error' ? 'rgba(239, 68, 68, 0.1)' :
-                                                            ['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status) ? 'rgba(99, 102, 241, 0.1)' :
-                                                                'rgba(0, 0, 0, 0.02)',
+                                        {/* Current Chunk - Always Visible */}
+                                        {(() => {
+                                            const currentChunk = getCurrentChunk();
+                                            return currentChunk && (
+                                                <Group gap="sm" p="xs" style={{ 
+                                                    background: 'rgba(99, 102, 241, 0.1)',
                                                     borderRadius: '8px',
-                                                    transition: 'all 0.3s ease'
+                                                    border: '1px solid rgba(99, 102, 241, 0.2)'
                                                 }}>
-                                                    <Group gap="sm">
-                                                        {chunk.status === 'success' && <IconCheck size={16} color="green" />}
-                                                        {chunk.status === 'error' && <Text c="red" size="sm">✗</Text>}
-                                                        {['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status) && <Loader size="xs" color="indigo" />}
-                                                        {chunk.status === 'pending' && <Text c="dimmed" size="sm">○</Text>}
-                                                        <Stack gap={2}>
-                                                            <Text size="sm" fw={500}>
-                                                                Chunk {chunk.chunk}/{chunk.totalChunks}
-                                                                {chunk.pageRange && <Text span c="dimmed" size="xs"> (Pages {chunk.pageRange})</Text>}
-                                                            </Text>
-                                                            {chunk.sectionType && (
-                                                                <Group gap="xs">
-                                                                    <Badge size="xs" color="blue" variant="light">
-                                                                        Chars {chunk.sectionType}
-                                                                    </Badge>
-                                                                </Group>
-                                                            )}
-                                                        </Stack>
-                                                    </Group>
-                                                    <Group gap="xs">
-                                                        {chunk.status === 'started' && <Badge size="xs" color="blue">Started</Badge>}
-                                                        {chunk.status === 'extracting' && <Badge size="xs" color="indigo">Extracting</Badge>}
-                                                        {chunk.status === 'processing' && <Badge size="xs" color="violet">Processing with AI</Badge>}
-                                                        {chunk.status === 'processing_with_context' && <Badge size="xs" color="grape">AI + Context</Badge>}
-                                                        {chunk.status === 'success' && (
-                                                            <>
-                                                                <Badge size="xs" color="teal">{chunk.entriesCount} entries</Badge>
-                                                                <Badge size="xs" color="gray">{chunk.processingTime}s</Badge>
-                                                            </>
-                                                        )}
-                                                        {chunk.status === 'error' && <Badge size="xs" color="red">Error</Badge>}
-                                                        {chunk.status === 'pending' && <Badge size="xs" color="gray" variant="light">Pending</Badge>}
-                                                    </Group>
+                                                    <Loader size="xs" color="indigo" />
+                                                    <Text size="sm" fw={500}>
+                                                        🔄 Currently: Chunk {currentChunk.chunk}/{currentChunk.totalChunks}
+                                                    </Text>
+                                                    {currentChunk.pageRange && (
+                                                        <Badge size="xs" color="blue" variant="light">
+                                                            Pages {currentChunk.pageRange}
+                                                        </Badge>
+                                                    )}
+                                                    <Badge size="xs" color="indigo">
+                                                        {currentChunk.status}
+                                                    </Badge>
                                                 </Group>
-                                            ))}
-                                        </Stack>
+                                            );
+                                        })()}
+
+                                        {/* Recent Completions - Always Visible */}
+                                        {recentCompletions.length > 0 && (
+                                            <Group gap="xs" wrap="wrap">
+                                                <Text size="sm" c="dimmed">⚡ Recent:</Text>
+                                                {recentCompletions.map(chunk => (
+                                                    <Badge 
+                                                        key={chunk.chunk}
+                                                        size="sm" 
+                                                        color="teal" 
+                                                        variant="light"
+                                                        leftSection={<IconCheck size={10} />}
+                                                    >
+                                                        Ch{chunk.chunk} ({chunk.entriesCount} entries, {chunk.processingTime}s)
+                                                    </Badge>
+                                                ))}
+                                            </Group>
+                                        )}
+
+                                        {/* Detailed View - Collapsible */}
+                                        <Collapse in={chunkDisplay.mode === 'detailed'}>
+                                            <Stack gap="md" mt="lg">
+                                                {/* Processing Phases */}
+                                                <Stack gap="xs">
+                                                    <Group gap="sm">
+                                                        {liveProgress.analysisPhase === 'analyzing' && <Loader size="xs" color="blue" />}
+                                                        {liveProgress.analysisPhase === 'complete' && <IconCheck size={16} color="green" />}
+                                                        <Text size="sm" c={liveProgress.analysisPhase === 'complete' ? 'teal' : 'dimmed'}>
+                                                            ✅ Text Extraction & Analysis
+                                                        </Text>
+                                                    </Group>
+                                                    <Group gap="sm">
+                                                        {liveProgress.totalChunks > 0 && liveProgress.chunks.filter(c => c.status === 'success').length < liveProgress.totalChunks && <Loader size="xs" color="blue" />}
+                                                        {liveProgress.chunks.filter(c => c.status === 'success').length === liveProgress.totalChunks && liveProgress.totalChunks > 0 && <IconCheck size={16} color="green" />}
+                                                        <Text size="sm" c={liveProgress.chunks.filter(c => c.status === 'success').length === liveProgress.totalChunks && liveProgress.totalChunks > 0 ? 'teal' : 'dimmed'}>
+                                                            🔄 Semantic Chunk Processing
+                                                        </Text>
+                                                    </Group>
+                                                    <Group gap="sm">
+                                                        {liveProgress.mergingPhase === 'merging' && <Loader size="xs" color="blue" />}
+                                                        {liveProgress.mergingPhase === 'complete' && <IconCheck size={16} color="green" />}
+                                                        <Text size="sm" c={liveProgress.mergingPhase === 'complete' ? 'teal' : 'dimmed'}>
+                                                            ⏳ Merging & Deduplication
+                                                        </Text>
+                                                    </Group>
+                                                </Stack>
+
+                                                {/* Filter Tabs */}
+                                                <Tabs value={chunkDisplay.filterMode} onChange={(value) => setChunkDisplay(prev => ({ ...prev, filterMode: value as any }))} variant="pills" size="xs">
+                                                    <Tabs.List>
+                                                        <Tabs.Tab value="all">All Chunks ({liveProgress.totalChunks})</Tabs.Tab>
+                                                        <Tabs.Tab value="active">Active ({liveProgress.chunks.filter(c => ['started', 'extracting', 'processing', 'processing_with_context'].includes(c.status)).length})</Tabs.Tab>
+                                                        <Tabs.Tab value="completed">Completed ({liveProgress.chunks.filter(c => c.status === 'success').length})</Tabs.Tab>
+                                                        {liveProgress.chunks.filter(c => c.status === 'error').length > 0 && (
+                                                            <Tabs.Tab value="failed" color="red">Failed ({liveProgress.chunks.filter(c => c.status === 'error').length})</Tabs.Tab>
+                                                        )}
+                                                    </Tabs.List>
+                                                </Tabs>
+
+                                                {/* Filtered Chunk List */}
+                                                <ScrollArea h={300}>
+                                                    <Stack gap="xs">
+                                                        {getFilteredChunks().map((chunk) => (
+                                                            <Group key={chunk.chunk} justify="space-between" p="xs" style={{
+                                                                background: chunk.status === 'success' ? 'rgba(16, 185, 129, 0.1)' :
+                                                                    chunk.status === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                                                                        ['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status) ? 'rgba(99, 102, 241, 0.1)' :
+                                                                            'rgba(0, 0, 0, 0.02)',
+                                                                borderRadius: '8px',
+                                                                transition: 'all 0.3s ease'
+                                                            }}>
+                                                                <Group gap="sm">
+                                                                    {chunk.status === 'success' && <IconCheck size={16} color="green" />}
+                                                                    {chunk.status === 'error' && <Text c="red" size="sm">✗</Text>}
+                                                                    {['started', 'extracting', 'processing', 'processing_with_context'].includes(chunk.status) && <Loader size="xs" color="indigo" />}
+                                                                    {chunk.status === 'pending' && <Text c="dimmed" size="sm">○</Text>}
+                                                                    <Stack gap={2}>
+                                                                        <Text size="sm" fw={500}>
+                                                                            Chunk {chunk.chunk}/{chunk.totalChunks}
+                                                                            {chunk.pageRange && <Text span c="dimmed" size="xs"> (Pages {chunk.pageRange})</Text>}
+                                                                        </Text>
+                                                                        {chunk.sectionType && (
+                                                                            <Group gap="xs">
+                                                                                <Badge size="xs" color="blue" variant="light">
+                                                                                    {chunk.sectionType}
+                                                                                </Badge>
+                                                                            </Group>
+                                                                        )}
+                                                                    </Stack>
+                                                                </Group>
+                                                                <Group gap="xs">
+                                                                    {chunk.status === 'started' && <Badge size="xs" color="blue">Started</Badge>}
+                                                                    {chunk.status === 'extracting' && <Badge size="xs" color="indigo">Extracting</Badge>}
+                                                                    {chunk.status === 'processing' && <Badge size="xs" color="violet">Processing with AI</Badge>}
+                                                                    {chunk.status === 'processing_with_context' && <Badge size="xs" color="grape">AI + Context</Badge>}
+                                                                    {chunk.status === 'success' && (
+                                                                        <>
+                                                                            <Badge size="xs" color="teal">{chunk.entriesCount} entries</Badge>
+                                                                            <Badge size="xs" color="gray">{chunk.processingTime}s</Badge>
+                                                                        </>
+                                                                    )}
+                                                                    {chunk.status === 'error' && <Badge size="xs" color="red">Error</Badge>}
+                                                                    {chunk.status === 'pending' && <Badge size="xs" color="gray" variant="light">Pending</Badge>}
+                                                                </Group>
+                                                            </Group>
+                                                        ))}
+                                                    </Stack>
+                                                </ScrollArea>
+                                            </Stack>
+                                        </Collapse>
                                     </Stack>
                                 </Card>
                             )}
@@ -773,80 +1376,96 @@ export function DashboardPage() {
                             {chunkInfo && processingStatus === 'complete' && (
                                 <Card shadow="sm" padding="lg" radius="lg" withBorder style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)' }}>
                                     <Stack gap="md">
-                                        <Group>
-                                            <ThemeIcon size="lg" radius="md" variant="light" color="blue">
-                                                <IconFileStack size={20} />
-                                            </ThemeIcon>
-                                            <div>
-                                                <Text size="lg" fw={600}>
-                                                    Chunk Processing Details
-                                                </Text>
-                                                <Group gap="xs" mt={4}>
-                                                    <Badge color="blue" variant="light" leftSection={<IconClock size={12} />}>
-                                                        {chunkInfo.processing_time}s total
-                                                    </Badge>
-                                                    <Badge color="violet" variant="light">
-                                                        {chunkInfo.total_chunks} chunks
-                                                    </Badge>
-                                                    <Badge color="teal" variant="light">
-                                                        {chunkInfo.total_pages} pages
-                                                    </Badge>
-                                                </Group>
-                                            </div>
+                                        {/* Compact Header - Always Visible */}
+                                        <Group justify="space-between">
+                                            <Group>
+                                                <ThemeIcon size="lg" radius="md" variant="light" color="blue">
+                                                    <IconFileStack size={20} />
+                                                </ThemeIcon>
+                                                <div>
+                                                    <Text size="lg" fw={600}>
+                                                        Chunk Processing Details
+                                                    </Text>
+                                                    <Group gap="xs" mt={4}>
+                                                        <Badge color="blue" variant="light" leftSection={<IconClock size={12} />}>
+                                                            {chunkInfo.processing_time}s total
+                                                        </Badge>
+                                                        <Badge color="violet" variant="light">
+                                                            {chunkInfo.total_chunks} chunks
+                                                        </Badge>
+                                                        <Badge color="teal" variant="light">
+                                                            {chunkInfo.total_pages} pages
+                                                        </Badge>
+                                                    </Group>
+                                                </div>
+                                            </Group>
+                                            <Button 
+                                                variant="subtle" 
+                                                size="sm"
+                                                onClick={() => setShowChunkDetails(!showChunkDetails)}
+                                                rightSection={showChunkDetails ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                                            >
+                                                {showChunkDetails ? 'Hide Details' : 'Show Details'}
+                                            </Button>
                                         </Group>
 
-                                        {(() => {
-                                            const totalDuplicates = chunkInfo.chunks.reduce((sum, chunk) =>
-                                                sum + ((chunk as any).duplicates_removed || 0), 0
-                                            );
-                                            return totalDuplicates > 0 && (
-                                                <Alert color="orange" variant="light" icon={<IconCheck size={16} />}>
-                                                    <Text size="xs">
-                                                        Removed {totalDuplicates} duplicate entries across all chunks for cleaner results
-                                                    </Text>
-                                                </Alert>
-                                            );
-                                        })()}
-
-                                        <Divider />
-
-                                        <Timeline active={chunkInfo.chunks.length} bulletSize={24} lineWidth={2} color="violet">
-                                            {chunkInfo.chunks.map((chunk) => (
-                                                <Timeline.Item
-                                                    key={chunk.chunk_id}
-                                                    bullet={chunk.status === 'success' ? <IconCheck size={12} /> : <Text size="xs">{chunk.chunk_id}</Text>}
-                                                    title={
-                                                        <Group gap="xs">
-                                                            <Text size="sm" fw={500}>
-                                                                Chunk {chunk.chunk_id}: Pages {chunk.page_range}
+                                        {/* Collapsible Details */}
+                                        <Collapse in={showChunkDetails}>
+                                            <Stack gap="md" mt="md">
+                                                {(() => {
+                                                    const totalDuplicates = chunkInfo.chunks.reduce((sum, chunk) =>
+                                                        sum + ((chunk as any).duplicates_removed || 0), 0
+                                                    );
+                                                    return totalDuplicates > 0 && (
+                                                        <Alert color="orange" variant="light" icon={<IconCheck size={16} />}>
+                                                            <Text size="xs">
+                                                                Removed {totalDuplicates} duplicate entries across all chunks for cleaner results
                                                             </Text>
-                                                            <Badge size="xs" color={chunk.status === 'success' ? 'teal' : 'red'}>
-                                                                {chunk.status}
-                                                            </Badge>
-                                                        </Group>
-                                                    }
-                                                >
-                                                    <Group gap="md" mt={4}>
-                                                        <Text size="xs" c="dimmed">
-                                                            ⏱️ {chunk.processing_time}s
-                                                        </Text>
-                                                        <Text size="xs" c="dimmed">
-                                                            📊 {chunk.entries_count} entries
-                                                        </Text>
-                                                        {(chunk as any).duplicates_removed > 0 && (
-                                                            <Text size="xs" c="orange">
-                                                                🔄 {(chunk as any).duplicates_removed} duplicates removed
-                                                            </Text>
-                                                        )}
-                                                    </Group>
-                                                    {chunk.error && (
-                                                        <Alert color="red" variant="light" mt="xs">
-                                                            <Text size="xs">{chunk.error}</Text>
                                                         </Alert>
-                                                    )}
-                                                </Timeline.Item>
-                                            ))}
-                                        </Timeline>
+                                                    );
+                                                })()}
+
+                                                <Divider />
+
+                                                <Timeline active={chunkInfo.chunks.length} bulletSize={24} lineWidth={2} color="violet">
+                                                    {chunkInfo.chunks.map((chunk) => (
+                                                        <Timeline.Item
+                                                            key={chunk.chunk_id}
+                                                            bullet={chunk.status === 'success' ? <IconCheck size={12} /> : <Text size="xs">{chunk.chunk_id}</Text>}
+                                                            title={
+                                                                <Group gap="xs">
+                                                                    <Text size="sm" fw={500}>
+                                                                        Chunk {chunk.chunk_id}: Pages {chunk.page_range}
+                                                                    </Text>
+                                                                    <Badge size="xs" color={chunk.status === 'success' ? 'teal' : 'red'}>
+                                                                        {chunk.status}
+                                                                    </Badge>
+                                                                </Group>
+                                                            }
+                                                        >
+                                                            <Group gap="md" mt={4}>
+                                                                <Text size="xs" c="dimmed">
+                                                                    ⏱️ {chunk.processing_time}s
+                                                                </Text>
+                                                                <Text size="xs" c="dimmed">
+                                                                    📊 {chunk.entries_count} entries
+                                                                </Text>
+                                                                {(chunk as any).duplicates_removed > 0 && (
+                                                                    <Text size="xs" c="orange">
+                                                                        🔄 {(chunk as any).duplicates_removed} duplicates removed
+                                                                    </Text>
+                                                                )}
+                                                            </Group>
+                                                            {chunk.error && (
+                                                                <Alert color="red" variant="light" mt="xs">
+                                                                    <Text size="xs">{chunk.error}</Text>
+                                                                </Alert>
+                                                            )}
+                                                        </Timeline.Item>
+                                                    ))}
+                                                </Timeline>
+                                            </Stack>
+                                        </Collapse>
                                     </Stack>
                                 </Card>
                             )}

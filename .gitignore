@@ -420,15 +420,12 @@ docker-compose.override.yml
 # ===================================
 # DOCUMENTATION (Development)
 # ===================================
-# Keep main README but ignore development docs
-DEVELOPMENT.md
-NOTES.md
-TODO.md
-CHANGELOG.md
-CONTRIBUTING.md
-
-# Keep important docs, ignore others
+# Ignore all markdown files except README files
+*.md
 !README.md
+!**/README.md
+
+# Keep important non-markdown docs
 !LICENSE
 !SECURITY.md
 
