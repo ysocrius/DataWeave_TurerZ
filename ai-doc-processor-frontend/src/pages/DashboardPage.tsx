@@ -620,10 +620,10 @@ export function DashboardPage() {
                                                 <Stack gap="sm">
                                                     <Group>
                                                         <Text size="sm" fw={600} c="blue">📝 Processing Mode</Text>
-                                                        <Badge size="sm" color="blue" variant="light">Character-Based</Badge>
+                                                        <Badge size="sm" color="violet" variant="light">Semantic Chunking</Badge>
                                                     </Group>
                                                     <Text size="xs" c="dimmed">
-                                                        Fixed-size chunks (1200 chars) with 100-char overlap for optimal data extraction and consistent performance.
+                                                        Intelligent content-aware chunking that breaks documents at natural section boundaries for superior data extraction quality and context preservation.
                                                     </Text>
                                                 </Stack>
                                             </Card>
@@ -1103,15 +1103,15 @@ export function DashboardPage() {
                                     </Text>
                                     <Group gap="xs">
                                         <ThemeIcon size="xs" color="violet" radius="xl"><IconCheck size={10} /></ThemeIcon>
-                                        <Text size="sm">Dynamic column detection</Text>
+                                        <Text size="sm">Semantic chunking</Text>
                                     </Group>
                                     <Group gap="xs">
                                         <ThemeIcon size="xs" color="violet" radius="xl"><IconCheck size={10} /></ThemeIcon>
-                                        <Text size="sm">100% data fidelity</Text>
+                                        <Text size="sm">Context memory (5-chunk history)</Text>
                                     </Group>
                                     <Group gap="xs">
                                         <ThemeIcon size="xs" color="violet" radius="xl"><IconCheck size={10} /></ThemeIcon>
-                                        <Text size="sm">Context-aware extraction</Text>
+                                        <Text size="sm">Intelligent boundaries</Text>
                                     </Group>
                                 </Stack>
                             </Card>
